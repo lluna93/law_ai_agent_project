@@ -2,7 +2,7 @@
 
 **React + FastAPI + GraphQL 기반 법률 정보 검색·상담 프로젝트 — RAG(pgvector)와 GraphRAG(Neo4j) 비교**
 
-하나의 법률 질문에 대해 **RAG(문서 유사도 검색)**와 **GraphRAG(벡터 검색 + 법률 지식 관계 확장)**가 독립적으로 답변하도록 설계했습니다. Docker 환경에서 **`consultBoth` GraphQL Mutation 및 React 비교 화면의 실제 실행을 확인**했습니다. 아래에는 기존 RAG 화면과 통합 비교 화면을 모두 수록했습니다.
+하나의 법률 질문에 대해 **RAG(문서 유사도 검색)**와 **GraphRAG(벡터 검색 + 법률 지식 관계 확장)**가 독립적으로 답변하도록 설계했습니다. Docker 환경에서 **`consultBoth` GraphQL Mutation 및 React 비교 화면의 실제 실행을 확인**했습니다. 아래에는 최신 통합 아키텍처, 최초 데이터 구축과 질문 처리 흐름, 로컬 학습 환경 구성 방법을 정리했습니다.
 
 > ⚠️ 이 프로젝트는 법률 정보 탐색을 위한 데모이며 변호사의 법률 자문을 대체하지 않습니다. 저장된 판례 청크는 판결문 전체가 아닐 수 있으며, 공식 판례 직접 링크는 검증된 사건번호·URL 메타데이터가 있을 때만 제공할 수 있습니다.
 
@@ -10,7 +10,7 @@
 
 ![Law AI Agent 시스템 아키텍처](assets/architecture.png)
 
-> 위 아키텍처 이미지는 초기 RAG 중심 설계의 참고 자료입니다. **현재 통합 구조**는 아래의 `consultBoth` 흐름과 GraphRAG 서비스를 함께 확인하세요.
+> **최신 통합 아키텍처:** Docker Compose의 `nginx`, `backend`, `graphrag`, `db`, `neo4j` 5개 서비스로 구성됩니다. 외부에 공개되는 포트는 기본적으로 Nginx의 80번이며, DB 및 내부 API 포트는 Docker 네트워크 내부에서 사용합니다. GraphRAG `/api/ask`는 메인 백엔드가 내부 HTTP로 호출합니다. 이미지의 서비스별 포트는 내부 리스닝 포트를 포함한 개념 표시이며, 실제 포트 공개 여부는 `docker-compose.yml`을 기준으로 확인하세요. 답변 모델은 `.env`의 `CHAT_MODEL`/`OPENAI_MODEL` 설정을 따릅니다.
 
 - **Nginx**: React(Vite) 정적 파일 제공 및 `/graphql`, `/health`를 FastAPI로 리버스 프록시
 - **FastAPI + Strawberry GraphQL**: 기존 `consultLaw` 및 통합 `consultBoth` Mutation
@@ -107,39 +107,14 @@ docker compose logs --tail=100 backend graphrag
 
 > **실행 상태(2026-11-21):** 로컬 Docker에서 `consultBoth`가 `rag.status = SUCCESS`, `graphrag.status = SUCCESS`를 반환하는 것을 확인했고, React 화면에서도 두 답변과 각각의 출처 TOP 5가 표시되는 것을 확인했습니다. 두 상태값은 API 실행 성공을 뜻하며, 법률적 정확성을 검증한 지표는 아닙니다.
 
-## 🆕 RAG + GraphRAG 통합 비교 — 실제 실행 화면
+## 🧪 통합 실행 확인 및 비교 관찰
 
-아래 이미지는 **2026-11-21 로컬 Docker 환경에서 실제 실행한 React 화면 캡처**입니다. 동일한 질문을 `consultBoth` Mutation으로 보내 RAG와 GraphRAG 답변을 한 화면에 나란히 표시합니다.
+2026-11-21 로컬 Docker 환경에서 `consultBoth` Mutation 호출 시 **RAG와 GraphRAG 모두 `SUCCESS`** 응답을 확인했습니다. React 화면에서 두 답변과 각 검색 출처 TOP 5를 나란히 표시했습니다. 다만 실행 화면 캡처는 문서를 간결하게 유지하기 위해 README에서 제외했습니다.
 
-### 1. 질문 입력 및 비교 상담 실행
-
-![RAG GraphRAG 비교 상담 질문 입력](assets/05-compare-question.png)
-
-- 사용자가 입력한 질문: **“AI가 생성한 문구는 저작권이 있나요? (AI가 특정 도서나 논문을 참고시)”**
-- **RAG + GraphRAG 비교 상담** 버튼 한 번으로 두 검색 경로를 호출합니다.
-
-### 2. 두 방식의 답변을 나란히 비교
-
-![RAG와 GraphRAG 실제 답변 비교](assets/06-compare-answers.png)
-
-- 왼쪽 **RAG · pgvector**: 검색한 법률 문서 청크를 중심으로 상담 내용 요약, 근거, 대응 방법을 정리합니다.
-- 오른쪽 **GraphRAG · Neo4j**: 법률 개념과 연결된 조문·판례 정보를 포함해 근거를 설명합니다.
-- 캡처에서 두 응답 모두 `SUCCESS`로 표시됩니다.
-
-### 3. 답변 하단의 검색 출처 TOP 5
-
-![RAG GraphRAG 검색 출처 TOP 5 비교](assets/07-compare-sources.png)
-
-- RAG는 `판례/민법_판례.txt` 등 **문서 청크 출처와 유사도**를 표시합니다.
-- GraphRAG는 `대법원:2015다5170` 등 **그래프 검색 출처와 유사도**를 표시합니다.
-- 각 항목의 **원문 보기**로 검색에 사용된 내용을 확인할 수 있습니다. 전체 판결문 직접 연결을 의미하지는 않습니다.
-- 검색 유사도는 서로 다른 임베딩 모델과 검색 공간에서 계산되므로 **0.44와 0.92를 직접 비교해 어느 쪽이 더 정확하다고 판단할 수 없습니다.**
-
-### 실험 관찰
-
-이번 질문에 대해 개발자는 **GraphRAG의 답변이 더 만족스럽다**고 평가했습니다. 법률 조문·판례를 구조적으로 제시해 근거를 따라가기 쉬웠다는 점이 장점입니다. 다만 이는 **단일 질문에 대한 주관적 관찰**이며, GraphRAG의 법률적 정확도가 더 높다는 검증 결과는 아닙니다.
-
-향후에는 동일 질문 세트에서 **근거 일치율, 판례·조문 인용 정확도, 답변 충실도, 응답 시간, 토큰 비용**을 함께 측정하는 방식으로 비교할 수 있습니다. 화면에 표시된 판례번호와 법률 설명은 LLM 출력이므로 공식 자료를 통한 별도 확인이 필요합니다.
+- **RAG:** 법률 문서 청크 유사도 검색을 기반으로 답변
+- **GraphRAG:** 유사 청크 검색 후 관련 조문·법률 개념·판례 관계를 확장하여 답변
+- **관찰:** 한 테스트 질문에서 GraphRAG의 근거 제시 방식이 더 만족스러웠습니다. 이는 단일 사례의 주관적 평가이며 법률 정확도 우위를 뜻하지 않습니다.
+- **주의:** 두 방식의 유사도 점수는 임베딩 모델이 달라 직접 비교할 수 없으며, 생성된 사건번호·법률 근거는 공식 자료로 검증해야 합니다.
 
 ### 통합 GraphQL 요청 예시
 
@@ -156,45 +131,6 @@ mutation {
 }
 ```
 
-## 🖥️ 기존 RAG 실행 화면 (Screenshots)
-
-아래 화면은 Docker로 실행한 **기존 RAG 상담 기능의 실제 브라우저 캡처**입니다. 상담 질문부터 AI 답변, 검색 근거 TOP 5, 저장된 법률 문서 청크 열람까지의 흐름을 보여줍니다.
-
-### 1. AI 법률 상담 입력
-
-![AI 법률 상담 입력 화면](assets/01-consultation-form.png)
-
-- 왼쪽 사이드바: **AI 법률 상담 / 상담 내역 / 법률 자료** 메뉴
-- 상단 상태 표시: **GraphQL 연결**
-- 상담 질문 입력 및 개인정보 입력 주의 안내
-- 화면의 예시 질문: `ai로 만든 글의 저작권`
-
-### 2. AI 법률 상담 결과
-
-![AI 법률 상담 결과](assets/02-ai-answer.png)
-
-- GraphQL `consultLaw` 요청 결과가 `SUCCESS`로 표시됩니다.
-- 답변은 상담 내용 요약, 관련 법률 및 근거, 가능한 대응 방법, 추가 확인 사항, 전문가 상담 필요 여부로 구성되어 있습니다.
-- **주의:** 화면에 표시된 법률·판례 언급은 LLM 생성 결과입니다. 특정 사건번호나 법률 해석의 정확성이 검증되었다는 의미는 아닙니다.
-
-### 3. RAG 검색 출처 TOP 5
-
-![RAG 검색 출처 TOP 5](assets/03-rag-sources.png)
-
-- **AG Grid**로 순위, 법률 자료 파일명, 코사인 유사도를 표시합니다.
-- 캡처에서는 `판례/민법_판례.txt`, `판례/형사소송법_판례.txt`, `판례/대한민국헌법_판례.txt` 등의 파일에서 검색된 청크가 표시됩니다.
-- **동일 파일이 여러 번 나타날 수 있습니다.** 문서별 1건이 아니라 *청크 단위 TOP 5*를 검색하기 때문입니다.
-- 유사도는 검색 순위를 위한 수치이며 **법적 타당성이나 답변 정확도의 점수는 아닙니다.**
-
-### 4. 검색 원문 상세보기 (Modal)
-
-![검색된 법률 원문 상세보기](assets/04-source-detail-modal.png)
-
-- 검색 결과의 **원문 보기**를 클릭하면 Ant Design Modal이 열립니다.
-- 출처 파일명, 검색 유사도, PostgreSQL에 저장된 **실제 검색 청크**를 확인할 수 있습니다.
-- **국가법령정보센터에서 판례 검색** 버튼은 공식 검색 페이지를 여는 기능이며, 현재는 선택된 특정 판결문으로 직접 이동하는 링크가 아닙니다.
-- 전체 판결문 직접 열람을 위해서는 `case_number`, `official_url`, `document_id` 등 검증된 메타데이터 연결이 추가로 필요합니다.
-
 ## ✨ 주요 기능
 
 | 기능 | 설명 |
@@ -206,7 +142,7 @@ mutation {
 | GraphQL API | Strawberry GraphQL의 `consultLaw`, `consultBoth`, `health` |
 | 통합 비교 상담 | 동일 질문으로 RAG·GraphRAG 병렬 실행, 답변 2열 비교 |
 | GraphRAG 검색 | Neo4j 벡터 인덱스 검색 및 조문·개념·판례 관계 확장 |
-| 컨테이너 배포 | Nginx + FastAPI + PostgreSQL을 Docker Compose로 실행 |
+| 컨테이너 배포 | Nginx + FastAPI 2개 + PostgreSQL + Neo4j를 Docker Compose로 실행 |
 
 ## 🧰 기술 스택
 
@@ -224,14 +160,21 @@ mutation {
 ```text
 law_ai_agent_project/
 ├── .env                         # 로컬 비밀 설정 (Git에 올리지 않음)
+├── .env.example                 # 공유 가능한 환경변수 예시
+├── .gitignore                   # 비밀 설정·백업·생성 파일 제외
+├── data/                        # 이용 조건 확인된 공개 법률 학습 데이터
+│   ├── README.md                # 데이터 출처 및 사용 규칙
+│   ├── sources.csv              # 데이터 출처·라이선스 기록 템플릿
+│   ├── statutes/                # 법령 원문 (검증 후 추가)
+│   └── cases/                   # 판결문 원문 (검증 후 추가)
 ├── docker-compose.yml           # nginx, backend, graphrag, db, neo4j
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── main.py                   # FastAPI 및 /graphql
 │   ├── ingest.py                 # 법률 문서 임베딩 적재 (수동 실행)
-│   ├── *.txt                     # 법령 원본
-│   ├── 판례/                     # 판례 원본
+│   ├── *.txt                     # 기존 법령 원본 (이전 환경)
+│   ├── 판례/                     # 기존 판례 원본 (이전 환경)
 │   └── app/
 │       ├── database.py
 │       ├── graphql/              # schema, resolver, types, inputs
@@ -270,6 +213,42 @@ law_ai_agent_project/
     → GraphQL 응답(answer, status, sources)
     → React 답변 + AG Grid 출처 + 원문 Modal
 ```
+
+## 📚 GitHub에서 내려받아 학습 시작하기
+
+이 저장소는 **코드 + 공개 가능한 법률 학습 데이터 + 데이터 출처 정보**를 제공하는 구조를 권장합니다. 다만 현재 패키지에는 실제 법령·판례 원문이 첨부되지 않아 **`data/`에는 안내문과 출처 기록 템플릿만 포함**되어 있습니다. 원문 데이터는 배포 권한 확인 후 별도로 추가해야 합니다.
+
+### 1. 소스 받기
+
+```powershell
+git clone https://github.com/lluna93/law_ai_agent_project.git
+cd law_ai_agent_project
+Copy-Item .env.example .env
+```
+
+`.env`에 본인의 OpenAI API 키, DB 접속정보, 기존 볼륨 이름을 입력합니다. `external: true`로 지정된 볼륨은 미리 존재해야 합니다. **신규 학습 환경에서는 기존 볼륨 이름을 임의로 입력하지 말고**, 새 빈 볼륨을 생성한 후 연결하거나 별도 신규 환경용 Compose 설정을 사용하세요.
+
+### 2. 데이터 준비 및 적재
+
+1. `data/README.md`의 출처·공개 조건을 확인하고 허용된 법령·판례 원문만 `data/statutes/`, `data/cases/`에 저장합니다.
+2. **현재 적재 스크립트는 기존 `backend/*.txt`, `backend/판례/` 등 경로를 사용할 수 있습니다.** `data/`를 자동으로 읽는다고 가정하지 마세요. 실제 `ingest.py`의 입력 경로를 확인해 데이터 파일을 복사하거나 스크립트 경로를 수정해야 합니다.
+3. 빈 PostgreSQL·Neo4j를 준비하고 테이블/인덱스 및 환경변수를 점검합니다.
+4. `backend/ingest.py`, `graphrag_backend/ingest.py`를 **각각 수동 실행**합니다. 임베딩 및 개념 추출 과정에서 API 비용이 발생할 수 있습니다.
+5. 기존 데이터가 있다면 **재적재하지 말고** 볼륨 연결 상태와 데이터 개수를 확인합니다. 두 적재 스크립트는 자동으로 실행되지 않습니다.
+
+### 3. 실행과 테스트
+
+```powershell
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+- 프론트엔드: `http://localhost/agent`
+- GraphQL: `http://localhost/graphql`
+- 테스트 Mutation: 위의 `consultBoth` 예시
+
+> **중요:** 저장소를 `git clone`하는 것만으로 PostgreSQL 임베딩과 Neo4j 지식 그래프가 자동 생성되지는 않습니다. 최초 적재 절차가 필요합니다. 기존 백업을 사용한다면 적재 대신 **각 DB를 별도로 복원**하세요.
 
 ## 🚀 Docker 배포
 
@@ -347,7 +326,7 @@ $body = @{ query = '{ health }' } | ConvertTo-Json
 Invoke-RestMethod -Uri 'http://localhost/graphql' -Method Post -ContentType 'application/json' -Body $body
 ```
 
-## 💾 PostgreSQL·Neo4j 데이터 보존
+## 💾 PostgreSQL·Neo4j 데이터 보존 및 별도 백업
 
 ### 원칙
 
@@ -378,7 +357,7 @@ docker cp "${cid}:/tmp/law_rag.dump" .\backups\law_rag.dump
 docker compose exec -T db rm -f /tmp/law_rag.dump
 ```
 
-> `backups/`는 `.gitignore`에 추가하고, DB 백업을 공개 GitHub 저장소에 업로드하지 마세요. 판례·법령 원문 등 데이터의 라이선스도 확인해야 합니다.
+> **백업 파일은 프로젝트 저장소와 분리해 보관하세요.** `backups/`, `*.dump`, `*.backup`, Neo4j 백업 파일 및 DB 볼륨 아카이브를 `.gitignore`에서 제외하고 GitHub에 업로드하지 않습니다. 암호화된 외장 SSD 또는 접근 제한된 별도 백업 저장소에 보관하세요. PostgreSQL dump에는 Neo4j 그래프가 포함되지 않습니다.
 
 ### 다른 PC로 이전
 
@@ -415,6 +394,10 @@ volumes:
 - 검색된 청크의 출처와 유사도는 법적 정확성의 보증이 아닙니다.
 - 공식 판례 원문 연결은 검증된 사건번호 및 URL 메타데이터가 확보된 경우에만 활성화합니다.
 
-## 📄 라이선스 / 데이터 출처
+## 📄 라이선스 / 데이터 출처 및 공개 기준
 
-애플리케이션 코드의 라이선스와 법령·판례 데이터의 이용 조건은 별도로 관리합니다. 법률 문서의 출처, 수집일, 이용 조건을 확인한 후 배포하세요.
+- **법령·판결문 원문:** 대한민국 저작권법 제7조의 법령·법원 판결 등은 저작권 보호 대상이 아닌 저작물에 해당할 수 있으나, 개별 자료의 성격과 출처·재이용 조건은 확인해야 합니다.
+- **공개 금지 또는 별도 허락 필요 가능:** 민간 판례 해설, 법률 데이터베이스의 편집물, 유료 서비스 수집 데이터, 개인정보·비식별 미흡 자료, 이용약관상 재배포가 제한된 파일.
+- **권장 방식:** 공식 출처에서 수집한 허용 자료만 원문 그대로 또는 출처를 명시하여 제공하고, `data/sources.csv`에 URL·수집일·이용조건·검토 결과를 기록합니다. 원문 파일 자체가 공개되지 않은 경우에는 공식 다운로드 링크와 수집 스크립트를 제공하는 방식을 고려하세요.
+- **코드와 데이터의 라이선스는 별도**로 관리하며, 공개 배포가 상업적 활용·모델 학습까지 자동 허용한다는 뜻은 아닙니다.
+
