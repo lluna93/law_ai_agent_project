@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+strawberry-graphql[fastapi]
+psycopg[binary]
+pgvector
+numpy
+openai
+python-dotenv
