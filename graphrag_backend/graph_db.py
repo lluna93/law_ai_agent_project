@@ -1,7 +1,8 @@
-
 from neo4j import GraphDatabase
 from config import (
-    NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+    NEO4J_URI,
+    NEO4J_USER,
+    NEO4J_PASSWORD,
 )
 
 
@@ -20,11 +21,15 @@ class GraphDB:
         with self.driver.session() as session:
             return [
                 record.data()
-                for record in session.run(query, **params)
+                for record in session.run(
+                    query, **params
+                )
             ]
 
     def setup(self):
-        for label in ["Law", "Article", "Case", "Concept"]:
+        for label in [
+            "Law", "Article", "Case", "Concept"
+        ]:
             self.execute(
                 f"CREATE CONSTRAINT {label.lower()}_id "
                 f"IF NOT EXISTS FOR (n:{label}) "
@@ -37,7 +42,8 @@ class GraphDB:
         """)
 
         self.execute("""
-        CREATE VECTOR INDEX legal_vector_cuda IF NOT EXISTS
+        CREATE VECTOR INDEX legal_vector_cuda
+        IF NOT EXISTS
         FOR (n:Chunk) ON (n.embedding_cuda)
         OPTIONS {indexConfig: {
           `vector.dimensions`: 384,
@@ -65,7 +71,9 @@ class GraphDB:
         SET c += $props
         """, id=case["id"], props=case)
 
-    def save_reference(self, case_id, article_id):
+    def save_reference(
+        self, case_id, article_id
+    ):
         self.execute("""
         MATCH (c:Case {id: $case_id})
         MATCH (a:Article {id: $article_id})
@@ -74,19 +82,29 @@ class GraphDB:
         case_id=case_id,
         article_id=article_id)
 
-    def save_concepts(self, node_id, concepts):
+    def save_concepts(
+        self, node_id, concepts
+    ):
         self.execute("""
         MATCH (n)
-        WHERE (n:Case OR n:Article) AND n.id = $node_id
+        WHERE (n:Case OR n:Article)
+          AND n.id = $node_id
+
         UNWIND $concepts AS name
+
         MERGE (k:Concept {id: name})
         SET k.name = name
+
         MERGE (n)-[:HAS_CONCEPT {
           origin: 'LLM'
         }]->(k)
-        """, node_id=node_id, concepts=concepts)
+        """,
+        node_id=node_id,
+        concepts=concepts)
 
-    def save_chunk(self, chunk_id, parent_id, text, vector):
+    def save_chunk(
+        self, chunk_id, parent_id, text, vector
+    ):
         self.execute("""
         MATCH (n)
         WHERE (n:Case OR n:Article)
@@ -99,7 +117,7 @@ class GraphDB:
 
         MERGE (n)-[:HAS_CHUNK]->(ch)
         """,
-                     chunk_id=chunk_id,
-                     parent_id=parent_id,
-                     text=text,
-                     vector=vector)
+        chunk_id=chunk_id,
+        parent_id=parent_id,
+        text=text,
+        vector=vector)

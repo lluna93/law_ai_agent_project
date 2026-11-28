@@ -1,13 +1,53 @@
-import strawberry
 
+import strawberry
 from fastapi.concurrency import run_in_threadpool
 
 from app.graphql.inputs import ConsultInput
 from app.graphql.types import (
     LawSourceType,
     ConsultResultType,
+    GraphSourceType,
+    GraphConsultResultType,
+    CompareResultType,
 )
 from app.services.agent_service import AgentService
+from app.services.compare_service import (
+    compare_answers,
+    normalize_rag,
+)
+
+
+def to_rag_type(result: dict) -> ConsultResultType:
+    return ConsultResultType(
+        answer=result["answer"],
+        status=result["status"],
+        sources=[
+            LawSourceType(**source)
+            for source in result["sources"]
+        ],
+    )
+
+
+def to_graph_type(result: dict) -> GraphConsultResultType:
+    return GraphConsultResultType(
+        answer=result["answer"],
+        status=result["status"],
+        sources=[
+            GraphSourceType(**source)
+            for source in result["sources"]
+        ],
+    )
+
+
+def validate_question(question: str, max_length: int):
+    question = question.strip()
+
+    if not question or len(question) > max_length:
+        raise ValueError(
+            f"상담 내용은 1~{max_length}자로 입력해주세요."
+        )
+
+    return question
 
 
 @strawberry.type
@@ -15,46 +55,44 @@ class Query:
 
     @strawberry.field
     def health(self) -> str:
-        # GraphQL 서버 상태 확인
         return "Law AI Agent Running"
 
 
 @strawberry.type
 class Mutation:
 
+    # 기존 RAG 상담
     @strawberry.mutation
     async def consult_law(
         self,
         input: ConsultInput,
     ) -> ConsultResultType:
 
-        question = input.question.strip()
+        question = validate_question(
+            input.question, 4000
+        )
 
-        # 입력값 검증
-        if not question:
-            raise ValueError("상담 내용을 입력해주세요.")
-
-        if len(question) > 4000:
-            raise ValueError("상담 내용은 4000자 이하로 입력해주세요.")
-
-        # 동기식 RAG/LLM 작업을 별도 스레드에서 실행
         result = await run_in_threadpool(
             AgentService().consult,
             question,
         )
 
-        # Python 결과를 GraphQL 타입으로 변환
-        sources = [
-            LawSourceType(
-                source=item["source"],
-                similarity=item["similarity"],
-                content=item["content"],
-            )
-            for item in result["sources"]
-        ]
+        return to_rag_type(normalize_rag(result))
 
-        return ConsultResultType(
-            answer=result["answer"],
-            status=result["status"],
-            sources=sources,
+    # 신규: RAG + GraphRAG 비교 상담
+    @strawberry.mutation
+    async def consult_both(
+        self,
+        input: ConsultInput,
+    ) -> CompareResultType:
+
+        question = validate_question(
+            input.question, 2000
+        )
+
+        result = await compare_answers(question)
+
+        return CompareResultType(
+            rag=to_rag_type(result["rag"]),
+            graphrag=to_graph_type(result["graphrag"]),
         )

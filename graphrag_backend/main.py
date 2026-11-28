@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from rag import ask
@@ -10,7 +9,10 @@ app = FastAPI(
 
 
 class QuestionRequest(BaseModel):
-    question: str = Field(min_length=2, max_length=2000)
+    question: str = Field(
+        min_length=2,
+        max_length=2000,
+    )
 
 
 @app.get("/api/health")

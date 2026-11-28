@@ -6,3 +6,4 @@ pgvector
 numpy
 openai
 python-dotenv
+httpx

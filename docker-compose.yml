@@ -1,95 +1,94 @@
-
 services:
-
-  # =====================================
-  # PostgreSQL + pgvector
-  # =====================================
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
     volumes:
       - pgvector_data:/var/lib/postgresql/data
-
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+        - 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
       interval: 10s
       timeout: 5s
       retries: 10
-
     networks:
       - law_network
 
+  neo4j:
+    image: neo4j:5.26
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - law_network
 
-  # =====================================
-  # FastAPI + GraphQL + RAG
-  # =====================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-
     restart: unless-stopped
-
     env_file:
       - .env
-
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
-      CHAT_MODEL: ${CHAT_MODEL:-gpt-4.1-mini}
-
+      GRAPHRAG_URL: http://graphrag:8001/api/ask
     depends_on:
       db:
         condition: service_healthy
-
     expose:
       - "8000"
-
     networks:
       - law_network
 
+  graphrag:
+    build:
+      context: ./graphrag_backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      HF_HOME: /models/huggingface
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    volumes:
+      - hf_models:/models/huggingface
+    depends_on:
+      - neo4j
+    expose:
+      - "8001"
+    networks:
+      - law_network
 
-  # =====================================
-  # Nginx + React
-  # =====================================
   nginx:
     build:
       context: .
       dockerfile: nginx/Dockerfile
-
     restart: unless-stopped
-
     ports:
       - "80:80"
-
     depends_on:
       - backend
-
     networks:
       - law_network
 
-
-# =====================================
-# 기존 pgvector 데이터 유지
-# =====================================
 volumes:
   pgvector_data:
     external: true
     name: ${PGVECTOR_VOLUME_NAME}
 
+  neo4j_data:
+    external: true
+    name: ${NEO4J_VOLUME_NAME}
 
-# =====================================
-# Docker 내부 네트워크
-# =====================================
+  hf_models:
+
 networks:
   law_network:
     driver: bridge

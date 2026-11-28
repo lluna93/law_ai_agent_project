@@ -1,6 +1,6 @@
+
 import { graphqlRequest } from "../client";
 
-// 법률 상담 Mutation
 const CONSULT_LAW = `
   mutation ConsultLaw($input: ConsultInput!) {
     consultLaw(input: $input) {
@@ -15,13 +15,50 @@ const CONSULT_LAW = `
   }
 `;
 
-// 법률 상담 API 호출
-export async function consultLaw(question) {
-    const data = await graphqlRequest(CONSULT_LAW, {
-        input: {
-            question,
-        },
-    });
+const CONSULT_BOTH = `
+  mutation ConsultBoth($input: ConsultInput!) {
+    consultBoth(input: $input) {
+      rag {
+        answer
+        status
+        sources {
+          source
+          similarity
+          content
+        }
+      }
 
-    return data.consultLaw;
+      graphrag {
+        answer
+        status
+        sources {
+          source
+          similarity
+          content
+          sourceType
+          citedArticles
+          concepts
+          relatedCases
+        }
+      }
+    }
+  }
+`;
+
+export async function consultLaw(question) {
+  const data = await graphqlRequest(
+    CONSULT_LAW,
+    { input: { question } }
+  );
+
+  return data.consultLaw;
+}
+
+export async function consultBoth(question) {
+  const data = await graphqlRequest(
+    CONSULT_BOTH,
+    { input: { question } }
+  );
+
+  return data.consultBoth;
 }
